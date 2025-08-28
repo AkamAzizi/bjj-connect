@@ -8,11 +8,17 @@ import {
   Alert,
   Image,
   ActivityIndicator,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  Dimensions,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { collection, addDoc } from 'firebase/firestore';
 import { auth, storage, db } from '../firebaseConfig';
+
+const { width } = Dimensions.get('window');
 
 interface CreatePostScreenProps {
   navigation: any;
@@ -24,10 +30,37 @@ export default function CreatePostScreen({ navigation }: CreatePostScreenProps) 
   const [loading, setLoading] = useState(false);
 
   const pickImage = async () => {
+    // Request gallery permissions first
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission required', 'Photo library access is needed to select images');
+      return;
+    }
+
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
-      aspect: [4, 3],
+      aspect: [1, 1], // Square aspect ratio like Instagram
+      quality: 0.8,
+    });
+
+    if (!result.canceled) {
+      setImageUri(result.assets[0].uri);
+    }
+  };
+
+  const takePhoto = async () => {
+    // Request camera permissions first
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission required', 'Camera access is needed to take photos');
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
       quality: 0.8,
     });
 
@@ -66,117 +99,242 @@ export default function CreatePostScreen({ navigation }: CreatePostScreenProps) 
         caption: caption.trim(),
         imageUrl,
         authorId: auth.currentUser?.uid,
-        authorName: auth.currentUser?.displayName || 'Unknown',
+        authorName: auth.currentUser?.displayName || 'BJJ Practitioner',
         createdAt: new Date(),
         likes: 0,
         comments: [],
       });
 
-      Alert.alert('Success', 'Post created!');
-      navigation.goBack();
+      Alert.alert('Success', 'Post shared successfully!', [
+        { text: 'OK', onPress: () => navigation.goBack() }
+      ]);
+      
+      // Reset form
+      setImageUri(null);
+      setCaption('');
     } catch (error) {
       console.error('Error creating post:', error);
-      Alert.alert('Error', 'Failed to create post');
+      Alert.alert('Error', 'Failed to create post. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Create Post</Text>
-
-      <TouchableOpacity style={styles.imageButton} onPress={pickImage}>
-        {imageUri ? (
-          <Image source={{ uri: imageUri }} style={styles.image} />
-        ) : (
-          <View style={styles.imagePlaceholder}>
-            <Text style={styles.imagePlaceholderText}>Tap to select image</Text>
-          </View>
-        )}
-      </TouchableOpacity>
-
-      <TextInput
-        style={styles.captionInput}
-        placeholder="Write a caption..."
-        value={caption}
-        onChangeText={setCaption}
-        multiline
-        maxLength={500}
-      />
-
-      <TouchableOpacity 
-        style={[styles.postButton, loading && styles.postButtonDisabled]} 
-        onPress={createPost}
-        disabled={loading}
+    <KeyboardAvoidingView 
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
       >
-        {loading ? (
-          <ActivityIndicator color="white" />
-        ) : (
-          <Text style={styles.postButtonText}>Share Post</Text>
-        )}
-      </TouchableOpacity>
-    </View>
+        <Text style={styles.title}>New Post</Text>
+
+        {/* Image Section */}
+        <View style={styles.imageSection}>
+          {imageUri ? (
+            <View style={styles.imageContainer}>
+              <Image source={{ uri: imageUri }} style={styles.selectedImage} />
+              <TouchableOpacity 
+                style={styles.changeImageButton}
+                onPress={() => setImageUri(null)}
+              >
+                <Text style={styles.changeImageText}>Change Photo</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.imagePlaceholder}>
+              <Text style={styles.placeholderTitle}>Add Photo</Text>
+              <Text style={styles.placeholderSubtitle}>Share your BJJ journey</Text>
+              
+              <View style={styles.imageButtonsContainer}>
+                <TouchableOpacity style={styles.imageButton} onPress={pickImage}>
+                  <Text style={styles.imageButtonText}>Gallery</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity style={styles.imageButton} onPress={takePhoto}>
+                  <Text style={styles.imageButtonText}>Camera</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        </View>
+
+        {/* Caption Section */}
+        <View style={styles.captionSection}>
+          <Text style={styles.captionLabel}>Caption</Text>
+          <TextInput
+            style={styles.captionInput}
+            placeholder="Write about your training, technique, or BJJ journey..."
+            value={caption}
+            onChangeText={setCaption}
+            multiline
+            maxLength={2000}
+            returnKeyType="done"
+            blurOnSubmit={true}
+          />
+          <Text style={styles.characterCount}>
+            {caption.length}/2000
+          </Text>
+        </View>
+      </ScrollView>
+
+      {/* Fixed Bottom Button */}
+      <View style={styles.bottomContainer}>
+        <TouchableOpacity 
+          style={[
+            styles.shareButton, 
+            (!imageUri || !caption.trim() || loading) && styles.shareButtonDisabled
+          ]} 
+          onPress={createPost}
+          disabled={!imageUri || !caption.trim() || loading}
+        >
+          {loading ? (
+            <ActivityIndicator color="white" size="small" />
+          ) : (
+            <Text style={styles.shareButtonText}>Share Post</Text>
+          )}
+        </TouchableOpacity>
+      </View>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#f8f9fa',
+  },
+  scrollContent: {
+    paddingBottom: 100, // Space for fixed button
   },
   title: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
-    marginBottom: 20,
     textAlign: 'center',
+    marginVertical: 20,
+    color: '#1a1a1a',
   },
-  imageButton: {
-    marginBottom: 20,
+  imageSection: {
+    marginHorizontal: 20,
+    marginBottom: 25,
   },
-  image: {
-    width: '100%',
-    height: 250,
-    borderRadius: 8,
+  imageContainer: {
+    alignItems: 'center',
+  },
+  selectedImage: {
+    width: width - 40,
+    height: width - 40,
+    borderRadius: 12,
+    marginBottom: 15,
+  },
+  changeImageButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    backgroundColor: '#e9ecef',
+    borderRadius: 20,
+  },
+  changeImageText: {
+    color: '#495057',
+    fontSize: 14,
+    fontWeight: '500',
   },
   imagePlaceholder: {
-    width: '100%',
-    height: 250,
-    backgroundColor: '#ddd',
-    borderRadius: 8,
+    height: width - 40,
+    backgroundColor: 'white',
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#ccc',
+    borderColor: '#e9ecef',
     borderStyle: 'dashed',
   },
-  imagePlaceholderText: {
-    color: '#666',
+  placeholderTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#495057',
+    marginBottom: 8,
+  },
+  placeholderSubtitle: {
     fontSize: 16,
+    color: '#6c757d',
+    marginBottom: 30,
+  },
+  imageButtonsContainer: {
+    flexDirection: 'row',
+    gap: 15,
+  },
+  imageButton: {
+    backgroundColor: '#007AFF',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 25,
+    minWidth: 100,
+    alignItems: 'center',
+  },
+  imageButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  captionSection: {
+    marginHorizontal: 20,
+  },
+  captionLabel: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1a1a1a',
+    marginBottom: 10,
   },
   captionInput: {
     backgroundColor: 'white',
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 15,
-    height: 100,
-    textAlignVertical: 'top',
-    marginBottom: 20,
-  },
-  postButton: {
-    backgroundColor: '#007AFF',
-    borderRadius: 8,
-    padding: 15,
-    alignItems: 'center',
-  },
-  postButtonDisabled: {
-    backgroundColor: '#ccc',
-  },
-  postButtonText: {
-    color: 'white',
+    borderRadius: 12,
+    padding: 16,
     fontSize: 16,
+    minHeight: 120,
+    textAlignVertical: 'top',
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  characterCount: {
+    textAlign: 'right',
+    fontSize: 12,
+    color: '#6c757d',
+    marginTop: 5,
+  },
+  bottomContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'white',
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#e9ecef',
+  },
+  shareButton: {
+    backgroundColor: '#007AFF',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    shadowColor: '#007AFF',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  shareButtonDisabled: {
+    backgroundColor: '#adb5bd',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  shareButtonText: {
+    color: 'white',
+    fontSize: 18,
     fontWeight: 'bold',
   },
 });

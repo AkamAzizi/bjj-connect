@@ -1,20 +1,39 @@
 import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
-import { onAuthStateChanged, User } from 'firebase/auth';
-import { View, Text, StyleSheet } from 'react-native';
+import { onAuthStateChanged, User, signOut } from 'firebase/auth';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { auth } from './src/firebaseConfig';
 import LoginScreen from './src/components/auth/LoginScreen';
 import SignupScreen from './src/components/auth/SignupScreen';
+import CreatePostScreen from './src/screens/CreatePostScreen';
 
 const Stack = createStackNavigator();
 
-// Temporary home screen
-function HomeScreen() {
+function HomeScreen({ navigation }: { navigation: any }) {
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <Text style={styles.text}>Welcome to BJJ Connect!</Text>
-      <Text style={styles.subtext}>Authentication working 🎉</Text>
+      <Text style={styles.subtext}>Authentication working</Text>
+      
+      <TouchableOpacity 
+        style={styles.createButton} 
+        onPress={() => navigation.navigate('CreatePost')}
+      >
+        <Text style={styles.createButtonText}>Create Post</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+        <Text style={styles.logoutText}>Logout</Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -43,16 +62,19 @@ export default function App() {
   return (
     <NavigationContainer>
       {user ? (
-        // User is signed in
         <Stack.Navigator>
           <Stack.Screen 
             name="Home" 
             component={HomeScreen} 
             options={{ title: 'BJJ Connect' }}
           />
+          <Stack.Screen 
+            name="CreatePost" 
+            component={CreatePostScreen} 
+            options={{ title: 'Create Post' }}
+          />
         </Stack.Navigator>
       ) : (
-        // User is not signed in
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           <Stack.Screen name="Login" component={LoginScreen} />
           <Stack.Screen name="Signup" component={SignupScreen} />
@@ -77,5 +99,28 @@ const styles = StyleSheet.create({
   subtext: {
     fontSize: 16,
     color: '#666',
+    marginBottom: 30,
+  },
+  createButton: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 30,
+    paddingVertical: 15,
+    borderRadius: 8,
+    marginBottom: 20,
+  },
+  createButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  logoutButton: {
+    backgroundColor: '#FF3B30',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  logoutText: {
+    color: 'white',
+    fontWeight: 'bold',
   },
 });

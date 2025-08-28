@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
+import { doc, updateDoc, increment } from 'firebase/firestore';
 
 interface Post {
   id: string;
@@ -23,6 +24,17 @@ interface Post {
 export default function FeedScreen() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+
+  const handleLike = async (postId: string) => {
+  try {
+    const postRef = doc(db, 'posts', postId);
+    await updateDoc(postRef, {
+      likes: increment(1)
+    });
+  } catch (error) {
+    console.error('Error liking post:', error);
+  }
+};
 
   useEffect(() => {
     const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'));
@@ -59,7 +71,7 @@ export default function FeedScreen() {
       
       <View style={styles.postContent}>
         <Text style={styles.caption}>{item.caption}</Text>
-        <TouchableOpacity style={styles.likeButton}>
+        <TouchableOpacity style={styles.likeButton} onPress={() => handleLike(item.id)}>
           <Text style={styles.likes}>❤️ {item.likes} likes</Text>
         </TouchableOpacity>
       </View>
